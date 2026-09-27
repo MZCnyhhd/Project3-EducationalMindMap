@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>求根公式符号思维导图</title>
+<script>
+window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$$','$$']]}, svg: {fontCache:'global'}, startup:{typeset:false} };
+</script>
+<style>
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; font-family: -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Roboto,sans-serif; background:#f5f7fa; color:#1f2d3d; overflow:hidden; }
+  #toolbar { position:fixed; top:12px; left:12px; z-index:10; display:flex; gap:8px; align-items:center; background:rgba(255,255,255,.92); padding:8px 12px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  #toolbar button { border:none; background:#3b6fd4; color:#fff; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:14px; }
+  #toolbar button.alt { background:#eef2f8; color:#3b6fd4; }
+  #toolbar .hint { font-size:12px; color:#6b7785; }
+  #viewport { position:absolute; inset:0; cursor:grab; }
+  #viewport.grabbing { cursor:grabbing; }
+  #world { position:absolute; left:0; top:0; transform-origin:0 0; }
+  #edges { position:absolute; left:0; top:0; overflow:visible; pointer-events:none; }
+  .node { position:absolute; width:230px; background:#fff; border:2px solid #cdd7e5; border-radius:12px; padding:10px 12px; box-shadow:0 3px 10px rgba(20,40,80,.10); }
+  .node.root { width:300px; border-color:#3b6fd4; background:#eef4ff; }
+  .node.combined { border-color:#e0913a; background:#fff6ea; width:320px; }
+  .node .sym { font-size:20px; font-weight:700; color:#1f2d3d; text-align:center; word-break:break-word; }
+  .node .type { display:inline-block; font-size:11px; color:#fff; background:#9aa7b8; border-radius:6px; padding:1px 7px; margin:5px auto 0; }
+  .node .meaning { font-size:13px; color:#41546b; margin-top:6px; line-height:1.55; }
+  .legend { position:fixed; right:12px; bottom:12px; background:rgba(255,255,255,.92); padding:8px 12px; border-radius:10px; font-size:12px; color:#6b7785; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <button id="zoomIn">＋</button>
+  <button id="zoomOut">－</button>
+  <button id="reset" class="alt">重置</button>
+  <span class="hint">滚轮缩放 · 拖拽平移</span>
+</div>
+<div id="viewport"><div id="world"><svg id="edges"></svg><div id="nodes"></div></div></div>
+<div class="legend">中心=公式 · 子节点=每个符号 · 橙色=整体意义</div>
+<script>
+const DATA = {"isRoot": true, "latex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", "children": [{"latex": "x", "type": "未知数", "meaning": "方程的两个根（解），即满足 ax²+bx+c=0 的 x 取值"}, {"latex": "=", "type": "关系符", "meaning": "等号，表示左右两边在数值上相等"}, {"latex": "\\frac{\\ }{\\ }", "type": "运算结构", "meaning": "分数线，表示「分子 ÷ 分母」这一整体除法运算"}, {"latex": "-b", "type": "项", "meaning": "分子第一项：一次项系数 b 的相反数（含负号）"}, {"latex": "b", "type": "系数", "meaning": "一元二次方程的一次项系数"}, {"latex": "\\pm", "type": "符号", "meaning": "正负号，表示同时取「加」与「减」，因此给出两个根"}, {"latex": "\\sqrt{\\ }", "type": "运算", "meaning": "平方根（二次根号），对判别式开平方"}, {"latex": "b^2", "type": "项", "meaning": "b 的平方，判别式的组成部分"}, {"latex": "-", "type": "运算符", "meaning": "减号，连接判别式内部 b² 与 4ac"}, {"latex": "4", "type": "常数", "meaning": "固定常数 4（判别式系数）"}, {"latex": "a", "type": "系数", "meaning": "二次项系数（a≠0），在分子与分母中均出现，为同一量"}, {"latex": "c", "type": "系数", "meaning": "常数项"}, {"latex": "2", "type": "常数", "meaning": "固定常数 2，分母的系数"}, {"latex": "b^2-4ac", "type": "判别式", "meaning": "一元二次方程的判别式 Δ，决定根的性质：Δ>0 两异实根，Δ=0 两相等实根，Δ<0 一对共轭复根"}, {"isCombined": true, "latex": "整体意义", "type": "combined", "meaning": "一元二次方程 ax²+bx+c=0（a≠0）的求根公式：分母 2a 与分子 -b±√(b²-4ac) 相除，给出方程的两个实根（Δ≥0）或一对共轭复根（Δ<0）。正负号 ± 体现「两个根」的来源。"}]};
+let mathOk=true;
+const NODE_W = 230, ROOT_W = 300, COMB_W = 320, NODE_H = 96, GAP = 24, DX = 320;
+let tx=60, ty=40, scale=1;
+function texToPlain(s){
+  return String(s)
+    .replace(/\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'($1)/($2)')
+    .replace(/\\sqrt\s*\{([^{}]*)\}/g,'√($1)').replace(/\\sqrt/g,'√')
+    .replace(/\\pm/g,'±').replace(/\\times/g,'×').replace(/\\div/g,'÷')
+    .replace(/\\Delta/g,'Δ').replace(/\\neq/g,'≠').replace(/\\leq/g,'≤').replace(/\\geq/g,'≥')
+    .replace(/\\left|\\right/g,'').replace(/[{}]/g,'').replace(/\\\(|\\\)|\$\$?/g,'');
+}
+const viewport=document.getElementById('viewport');
+const world=document.getElementById('world');
+const nodesEl=document.getElementById('nodes');
+const svg=document.getElementById('edges');
+
+function layout(node, depth, lc){
+  node.depth=depth;
+  if(!node.children||node.children.length===0){
+    node.y=lc.v; lc.v+=NODE_H+GAP;
+  } else {
+    node.children.forEach(c=>layout(c,depth+1,lc));
+    node.y=(node.children[0].y+node.children[node.children.length-1].y)/2;
+  }
+  node.x = depth===0 ? 0 : depth*DX;
+}
+layout(DATA,0,{v:0});
+
+function makeNode(node){
+  const d=document.createElement('div');
+  d.className='node'+(node.isRoot?' root':'')+(node.isCombined?' combined':'');
+  const w = node.isRoot?ROOT_W:(node.isCombined?COMB_W:NODE_W);
+  d.style.left=node.x+'px';
+  d.style.top=node.y+'px';
+  d.style.width=w+'px';
+  let sym;
+  if(node.isRoot){ sym = mathOk ? ('$$'+node.latex+'$$') : texToPlain(node.latex); }
+  else if(node.isCombined){ sym=node.latex; }
+  else { sym = mathOk ? ('\\('+node.latex+'\\)') : texToPlain(node.latex); }
+  let h='<div class="sym">'+sym+'</div>';
+  if(!node.isRoot && node.type){ h+='<div style="text-align:center"><span class="type">'+node.type+'</span></div>'; }
+  if(node.meaning){ h+='<div class="meaning">'+node.meaning+'</div>'; }
+  d.innerHTML=h;
+  nodesEl.appendChild(d);
+  node._el=d; node._w=w;
+  (node.children||[]).forEach(makeNode);
+}
+makeNode(DATA);
+
+function drawEdges(){
+  svg.innerHTML='';
+  let maxX=0,maxY=0;
+  function walk(n){
+    const x2=n.x+n._w, y2=n.y+NODE_H/2;
+    maxX=Math.max(maxX,x2); maxY=Math.max(maxY,n.y+NODE_H);
+    (n.children||[]).forEach(c=>{
+      const x1=c.x, y1=c.y+NODE_H/2;
+      const mx=(x1+x2)/2;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d','M '+x1+' '+y1+' C '+mx+' '+y1+', '+mx+' '+y2+', '+x2+' '+y2);
+      path.setAttribute('stroke','#b9c6da'); path.setAttribute('stroke-width','2'); path.setAttribute('fill','none');
+      svg.appendChild(path);
+      walk(c);
+    });
+  }
+  walk(DATA);
+  svg.setAttribute('width',maxX+40); svg.setAttribute('height',maxY+40);
+  applyTransform();
+}
+function applyTransform(){ world.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')'; }
+function typesetThenDraw(){
+  if(window.MathJax && MathJax.typesetPromise){
+    MathJax.typesetPromise([nodesEl]).then(drawEdges).catch(drawEdges);
+  } else { drawEdges(); }
+}
+const MJ_CDNS=[
+ 'https://registry.npmmirror.com/mathjax/3.2.2/files/es5/tex-svg.js',
+ 'https://cdn.bootcdn.net/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js',
+ 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js',
+ 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js',
+ 'https://unpkg.com/mathjax@3.2.2/es5/tex-svg.js'
+];
+function tryLoad(url,ok,fail){
+  const s=document.createElement('script'); s.src=url;
+  let done=false;
+  const t=setTimeout(()=>{ if(!done){ done=true; fail(); } },6000);
+  s.onload=()=>{ if(!done){ done=true; clearTimeout(t); ok(); } };
+  s.onerror=()=>{ if(!done){ done=true; clearTimeout(t); fail(); } };
+  document.head.appendChild(s);
+}
+function loadMJ(i){
+  if(i>=MJ_CDNS.length){ mathOk=false; renderAll(); return; }
+  tryLoad(MJ_CDNS[i],()=>{
+    const wait=()=>{ if(window.MathJax&&MathJax.typesetPromise){ MathJax.typesetPromise([nodesEl]).then(drawEdges).catch(()=>{}); } else { setTimeout(wait,150); } };
+    wait();
+  },()=>loadMJ(i+1));
+}
+function renderAll(){ nodesEl.innerHTML=''; svg.innerHTML=''; makeNode(DATA); }
+loadMJ(0);
+</script>
+
+viewport.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const delta=-e.deltaY*0.0015;
+  const ns=Math.min(2.5,Math.max(0.3,scale*(1+delta)));
+  const rect=viewport.getBoundingClientRect();
+  const cx=e.clientX-rect.left, cy=e.clientY-rect.top;
+  tx = cx-(cx-tx)*(ns/scale); ty=cy-(cy-ty)*(ns/scale);
+  scale=ns; applyTransform();
+},{passive:false});
+let dragging=false, sx,sy, stx,sty;
+viewport.addEventListener('mousedown',e=>{ dragging=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty; viewport.classList.add('grabbing'); });
+window.addEventListener('mousemove',e=>{ if(!dragging)return; tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform(); });
+window.addEventListener('mouseup',()=>{ dragging=false; viewport.classList.remove('grabbing'); });
+document.getElementById('zoomIn').onclick=()=>{ scale=Math.min(2.5,scale*1.2); applyTransform(); };
+document.getElementById('zoomOut').onclick=()=>{ scale=Math.max(0.3,scale*0.8); applyTransform(); };
+document.getElementById('reset').onclick=()=>{ tx=60; ty=40; scale=1; applyTransform(); };
+</script>
+</body>
+</html>
