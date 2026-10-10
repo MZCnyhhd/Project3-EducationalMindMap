@@ -46,12 +46,12 @@ window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$
   .card-h { display:flex; align-items:center; gap:7px; padding:11px 14px; font-size:14px; font-weight:700; color:#22334a; border-bottom:1px solid #eef2f8; background:#fcfdff; }
   .card-h .sp { flex:1; }
   .card-b { padding:12px 14px; }
-  .zbar { display:flex; justify-content:center; gap:10px; margin-bottom:10px; }
+  #imgzone { position:relative; border:1.5px dashed #c3d0e2; border-radius:10px; background:#fafcff; padding:8px; margin-bottom:10px; }
+  #imgClearX { display:none; position:absolute; top:6px; right:6px; width:22px; height:22px; border:none; border-radius:50%; background:rgba(226,68,92,.12); color:#d6453d; font-size:14px; line-height:1; cursor:pointer; }
+  #imgClearX:hover { background:rgba(226,68,92,.25); }
   .zbtn { display:inline-block; border:1px solid #cdd7e5; background:#fff; color:#41546b; border-radius:8px; padding:6px 14px; font-size:12.5px; cursor:pointer; font-weight:500; margin:0; }
   .zbtn:hover { border-color:#3b6fd4; color:#3b6fd4; }
   .zbtn.sm { padding:3px 10px; }
-  #imgzone { border:1.5px dashed #c3d0e2; border-radius:10px; background:#fafcff; padding:8px; margin-bottom:10px; }
-  #imgzone.drag { border-color:#3b6fd4; background:#f2f7ff; }
   #imginner { text-align:center; cursor:pointer; min-height:34px; display:flex; align-items:center; justify-content:center; }
   #imgph { font-size:12px; color:#8a98aa; }
   .zhint { font-size:11px; color:#9aa7b8; margin-top:5px; line-height:1.45; text-align:center; }
@@ -95,22 +95,16 @@ window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$
       <div class="card-h">✏️ 输入区域 Input</div>
       <div class="card-b">
         <div id="imgzone">
-          <div class="zbar">
-            <button class="zbtn" id="imgClear">🗑 清除</button>
-            <label class="zbtn" for="imgfile">⬆ 上传图片</label>
-            <button class="zbtn" id="imgOCR" style="display:none">🪄 识别</button>
-            <button class="zbtn" id="imgCopy" style="display:none">⧉ 复制图片</button>
-          </div>
+          <button id="imgClearX" title="移除图片" style="display:none">×</button>
           <div id="imginner">
-            <div id="imgph">在此粘贴公式图片，或点击上传截图</div>
+            <div id="imgph">在此粘贴公式图片（Ctrl+V）</div>
             <img id="imgprev" class="imgprev" alt="">
           </div>
-          <div class="zhint">图片发阿哲识别 → 复制返回的 LaTeX → 点「🪄 识别」或点回本页自动填入</div>
+          <div class="zhint">图片发阿哲识别 → 复制返回的 LaTeX → 点回本页自动填入（点图片可重试）</div>
         </div>
         <textarea id="formula" placeholder="例如 x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"></textarea>
       </div>
     </div>
-    <input id="imgfile" type="file" accept="image/*" style="display:none">
 
     <div class="card">
       <div class="card-h">⬇ 输出区域 Output
@@ -398,22 +392,16 @@ function updatePreview(){
 document.getElementById('formula').addEventListener('input',()=>{ updatePreview(); scheduleRegen(); });
 document.getElementById('e-latex').addEventListener('input',e=>renderEPreview(e.target.value));
 
-/* ---------- 公式图片输入 ---------- */
+/* ---------- 公式图片输入（仅 Ctrl+V 粘贴） ---------- */
 let curImg=null;
 function setImg(file){
   if(!file||!file.type||!file.type.startsWith('image/')) return;
   const rd=new FileReader();
-  rd.onload=()=>{ const pv=document.getElementById('imgprev'); pv.src=rd.result; pv.style.display='inline-block'; document.getElementById('imgph').style.display='none'; document.getElementById('imgCopy').style.display='inline-block'; document.getElementById('imgOCR').style.display='inline-block'; curImg=rd.result; };
+  rd.onload=()=>{ const pv=document.getElementById('imgprev'); pv.src=rd.result; pv.style.display='inline-block'; document.getElementById('imgph').style.display='none'; document.getElementById('imgClearX').style.display='block'; curImg=rd.result; };
   rd.readAsDataURL(file);
 }
-document.getElementById('imgfile').addEventListener('change',e=>setImg(e.target.files[0]));
 window.addEventListener('paste',e=>{ const it=[...(e.clipboardData&&e.clipboardData.items||[])].find(i=>i.kind==='file'&&i.type.startsWith('image/')); if(it) setImg(it.getAsFile()); });
-const imgzone=document.getElementById('imgzone');
-imgzone.addEventListener('dragover',e=>{ e.preventDefault(); imgzone.classList.add('drag'); });
-imgzone.addEventListener('dragleave',()=>imgzone.classList.remove('drag'));
-imgzone.addEventListener('drop',e=>{ e.preventDefault(); imgzone.classList.remove('drag'); setImg(e.dataTransfer.files[0]); });
-document.getElementById('imginner').onclick=()=>document.getElementById('imgfile').click();
-document.getElementById('imgClear').onclick=()=>{ curImg=null; const pv=document.getElementById('imgprev'); pv.style.display='none'; pv.src=''; document.getElementById('imgCopy').style.display='none'; document.getElementById('imgOCR').style.display='none'; document.getElementById('imgph').style.display='block'; };
+document.getElementById('imgClearX').onclick=(e)=>{ e.stopPropagation(); curImg=null; const pv=document.getElementById('imgprev'); pv.style.display='none'; pv.src=''; document.getElementById('imgClearX').style.display='none'; document.getElementById('imgph').style.display='block'; };
 function extractLatex(t){
   t=(t||'').trim(); if(!t) return '';
   const m=t.match(/\$\$([\s\S]+?)\$\$/)||t.match(/\$([^$\n]+?)\$/)||t.match(/\\\(([\s\S]+?)\\\)/)||t.match(/\\\[([\s\S]+?)\\\]/);
@@ -435,20 +423,12 @@ async function tryClipboardFill(){
   }catch(e){}
   return false;
 }
-document.getElementById('imgOCR').onclick=async()=>{ const ok=await tryClipboardFill(); if(!ok) alert('剪贴板里没有识别到 LaTeX：请先把图片发给阿哲，复制返回的公式（$...$ 内容）后再点。'); };
+document.getElementById('imginner').onclick=async()=>{ if(!curImg) return; const ok=await tryClipboardFill(); if(!ok) alert('剪贴板里没有识别到 LaTeX：请先把图片发给阿哲，复制返回的公式（$...$ 内容）后再点图片。'); };
 window.addEventListener('focus',()=>{ if(curImg) tryClipboardFill(); });
 let zoomPct=100;
 function applyZoom(){ document.getElementById('fpreview').style.fontSize=zoomPct+'%'; document.getElementById('zpct').textContent=zoomPct+'%'; }
 document.getElementById('zIn').onclick=()=>{ zoomPct=Math.min(300,zoomPct+10); applyZoom(); };
 document.getElementById('zOut').onclick=()=>{ zoomPct=Math.max(50,zoomPct-10); applyZoom(); };
-document.getElementById('imgCopy').onclick=async()=>{
-  if(!curImg) return;
-  try{
-    const blob=await (await fetch(curImg)).blob();
-    await navigator.clipboard.write([new window.ClipboardItem({'image/png':blob})]);
-    alert('图片已复制到剪贴板，去聊天栏粘贴发给阿哲即可识别为 LaTeX。');
-  }catch(err){ alert('复制失败，请手动右键图片→复制。'); }
-};
 
 /* ---------- 面板交互 ---------- */
 function addSymRow(s='',t='',m=''){
