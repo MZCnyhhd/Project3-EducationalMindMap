@@ -18,10 +18,6 @@ window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$
   textarea, input { width:100%; border:1px solid #cdd7e5; border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; }
   textarea { resize:vertical; }
   #formula { min-height:88px; font-family:"Cascadia Code",Consolas,monospace; }
-  .sym-row { display:grid; grid-template-columns:1fr 82px 1.5fr 28px; gap:6px; margin-bottom:6px; }
-  .sym-row input { padding:6px 8px; font-size:12px; }
-  .sym-row .del { border:none; background:#fde8e8; color:#d6453d; border-radius:8px; cursor:pointer; font-size:14px; height:30px; }
-  .row-head { display:grid; grid-template-columns:1fr 82px 1.5fr 28px; gap:6px; font-size:11px; color:#8a98aa; margin-bottom:2px; }
   .btn { border:none; border-radius:8px; padding:9px 12px; font-size:13px; cursor:pointer; font-weight:600; }
   .btn.primary { background:#3b6fd4; color:#fff; }
   .btn.ghost { background:#eef2f8; color:#3b6fd4; }
@@ -89,7 +85,7 @@ window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$
 <div id="app">
   <div id="panel">
     <h1>公式符号思维导图<span class="badge-ok" id="unlockBadge" style="display:none">已解锁完整版</span></h1>
-    <div class="sub">EducationalMindMap · 输入 LaTeX 与逐符号解释 → 自动结构分解为思维导图（符号｜类型｜含义，组合节点带组合含义）</div>
+    <div class="sub">EducationalMindMap · 输入 LaTeX 自动结构分解为思维导图；点击导图上任意节点直接编辑 符号｜类型｜含义</div>
 
     <div class="card">
       <div class="card-h">✏️ 输入区域 Input</div>
@@ -115,14 +111,6 @@ window.MathJax = { tex: {inlineMath: [['$','$'],['\\(','\\)']], displayMath:[['$
         <div id="fpreview" class="fprev out"></div>
       </div>
     </div>
-
-    <label>② 符号含义表（符号写 LaTeX，含义自动挂到分解树对应节点）</label>
-    <div class="row-head"><span>符号 LaTeX</span><span>类型</span><span>含义</span><span></span></div>
-    <div id="syms"></div>
-    <button class="btn ghost" id="addSym" style="width:100%;margin-top:2px;">＋ 添加符号</button>
-
-    <label>③ 整体意义</label>
-    <textarea id="overall" placeholder="这个公式整体在表达什么、等号两边关系、适用条件"></textarea>
 
     <div class="btn-row">
       <button class="btn primary" id="render">生成思维导图</button>
@@ -279,17 +267,12 @@ function decompose(s){
   return node;
 }
 
-/* ---------- 构树 + 挂含义 ---------- */
+/* ---------- 构树 + 挂含义（含义存内存，导图节点点击编辑为唯一入口） ---------- */
+const MEANINGS={};   // nkey -> {latex,type,meaning}
+let OVERALL='';
 function buildTree(){
   const formula=document.getElementById('formula').value.trim();
-  const overall=document.getElementById('overall').value.trim();
-  const table={};
-  document.querySelectorAll('#syms .sym-row').forEach(r=>{
-    const s=r.querySelector('.s-sym').value.trim();
-    const t=r.querySelector('.s-type').value.trim();
-    const m=r.querySelector('.s-mean').value.trim();
-    if(s) table[nkey(s)]={type:t,meaning:m};
-  });
+  const table=MEANINGS;
   const root={isRoot:true, latex:formula, children:[]};
   const d=decompose(formula);
   if(d&&d.children.length) root.children=d.children;
@@ -298,7 +281,7 @@ function buildTree(){
     if(hit){ if(hit.type)n.type=hit.type; if(hit.meaning)n.meaning=hit.meaning; }
     (n.children||[]).forEach(attach);
   })(root);
-  root.overall=overall;
+  root.overall=OVERALL;
   return root;
 }
 
@@ -431,23 +414,10 @@ document.getElementById('zIn').onclick=()=>{ zoomPct=Math.min(300,zoomPct+10); a
 document.getElementById('zOut').onclick=()=>{ zoomPct=Math.max(50,zoomPct-10); applyZoom(); };
 
 /* ---------- 面板交互 ---------- */
-function addSymRow(s='',t='',m=''){
-  const row=document.createElement('div'); row.className='sym-row';
-  row.innerHTML='<input class="s-sym" placeholder="如 x" value="'+s.replace(/"/g,'&quot;')+'">'+
-    '<input class="s-type" placeholder="如 未知数" value="'+t.replace(/"/g,'&quot;')+'">'+
-    '<input class="s-mean" placeholder="含义" value="'+m.replace(/"/g,'&quot;')+'">'+
-    '<button class="del">×</button>';
-  row.querySelector('.del').onclick=()=>{ row.remove(); scheduleRegen(); };
-  row.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',scheduleRegen));
-  document.getElementById('syms').appendChild(row);
-}
-document.getElementById('addSym').onclick=()=>addSymRow();
 document.getElementById('render').onclick=regenerate;
 document.getElementById('export').onclick=()=>{
-  const obj={formula:document.getElementById('formula').value.trim(),overall:document.getElementById('overall').value.trim(),symbols:[]};
-  document.querySelectorAll('#syms .sym-row').forEach(r=>{
-    obj.symbols.push({latex:r.querySelector('.s-sym').value.trim(),type:r.querySelector('.s-type').value.trim(),meaning:r.querySelector('.s-mean').value.trim()});
-  });
+  const obj={formula:document.getElementById('formula').value.trim(),overall:OVERALL,symbols:[]};
+  Object.values(MEANINGS).forEach(v=>{ obj.symbols.push({latex:v.latex,type:v.type,meaning:v.meaning}); });
   const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='mindmap.json'; a.click();
 };
@@ -457,9 +427,9 @@ document.getElementById('importFile').onchange=e=>{
     try{
       const o=JSON.parse(rd.result);
       document.getElementById('formula').value=o.formula||o.latex||'';
-      document.getElementById('overall').value=o.overall||o.combined||'';
-      document.getElementById('syms').innerHTML='';
-      (o.symbols||[]).forEach(c=>addSymRow(c.latex||'',c.type||'',c.meaning||''));
+      OVERALL=o.overall||o.combined||'';
+      Object.keys(MEANINGS).forEach(k=>delete MEANINGS[k]);
+      (o.symbols||[]).forEach(c=>{ if(c.latex) MEANINGS[nkey(c.latex)]={latex:c.latex,type:c.type||'',meaning:c.meaning||''}; });
       regenerate();
     }catch(err){ alert('JSON 解析失败'); }
   };
@@ -507,8 +477,8 @@ document.getElementById('formula').value='x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{
  ['2','常数','常数 2：在分母 2a 中作系数，在 b² 的指数上作幂次；来源于求根公式的推导（配方/韦达定理）'],
  ['2a','项','分母：常数 2 与二次项系数 a 的乘积；因位于分母，要求 a≠0'],
  ['b^2-4ac','判别式','判别式 Δ：b 的平方减去 4 倍的 a·c 乘积。Δ>0 ⟹ 两个不同实根；Δ=0 ⟹ 两个相等实根（重根）；Δ<0 ⟹ 一对共轭复根。它完全决定根的性质']
-].forEach(r=>addSymRow(r[0],r[1],r[2]));
-document.getElementById('overall').value='一元二次方程 ax²+bx+c=0（a≠0）的求根公式：分母 2a 与分子 -b±√(b²-4ac) 相除，给出两个实根（Δ≥0）或一对共轭复根（Δ<0）。± 体现「两个根」。';
+].forEach(r=>{ MEANINGS[nkey(r[0])]={latex:r[0],type:r[1],meaning:r[2]}; });
+OVERALL='一元二次方程 ax²+bx+c=0（a≠0）的求根公式：分母 2a 与分子 -b±√(b²-4ac) 相除，给出两个实根（Δ≥0）或一对共轭复根（Δ<0）。± 体现「两个根」。';
 regenerate();
 
 /* ---------- 节点编辑 ---------- */
@@ -561,15 +531,11 @@ document.getElementById('e-save').onclick=()=>{
   if(editNode.isRoot){
     const f=document.getElementById('e-latex').value.trim();
     if(f) document.getElementById('formula').value=f;
-    document.getElementById('overall').value=document.getElementById('e-mean').value.trim();
+    OVERALL=document.getElementById('e-mean').value.trim();
     closeEditor(); regenerate(); return;
   }
   const key=nkey(editNode.latex);
-  const t=document.getElementById('e-type').value.trim();
-  const m=document.getElementById('e-mean').value.trim();
-  let row=[...document.querySelectorAll('#syms .sym-row')].find(r=>nkey(r.querySelector('.s-sym').value.trim())===key);
-  if(row){ row.querySelector('.s-type').value=t; row.querySelector('.s-mean').value=m; }
-  else addSymRow(editNode.latex,t,m);
+  MEANINGS[key]={latex:editNode.latex,type:document.getElementById('e-type').value.trim(),meaning:document.getElementById('e-mean').value.trim()};
   closeEditor(); regenerate();
 };
 document.getElementById('e-cancel').onclick=closeEditor;
